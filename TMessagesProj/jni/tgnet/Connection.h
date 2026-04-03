@@ -65,7 +65,8 @@ private:
         ProtocolTypeEF,
         ProtocolTypeEE,
         ProtocolTypeDD,
-        ProtocolTypeTLS
+        ProtocolTypeTLS,
+        ProtocolTypeRealTLS
     };
 
     inline void encryptKeyWithSecret(uint8_t *array, uint8_t secretType);

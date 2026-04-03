@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="AppName">Telegram</string>
-    <string name="AppNameBeta">Telegram Beta</string>
+    <string name="AppName">Tractorgram</string>
+    <string name="AppNameBeta">Tractorgram Beta</string>
     <string name="LanguageName">Italiano</string>
     <string name="English">Inglese</string>
     <string name="LanguageNameInEnglish">Italian</string>
@@ -216,8 +216,8 @@
     <string name="NotificationGroupFew">%1$s ha inviato %3$s nel gruppo %2$s</string>
     <string name="NotificationGroupAlbum">%1$s ha inviato un album nel gruppo %2$s</string>
     <string name="NotificationGroupForwardedFew">%1$s ha inoltrato %3$s nel gruppo %2$s</string>
-    <string name="NotificationHiddenName">Telegram</string>
-    <string name="NotificationHiddenChatName">Telegram</string>
+    <string name="NotificationHiddenName">Tractorgram</string>
+    <string name="NotificationHiddenChatName">Tractorgram</string>
     <string name="NotificationHiddenChatUserName">Utente</string>
     <string name="NotificationHiddenMessage">Nuovo messaggio</string>
     <string name="Reply">Rispondi</string>
@@ -281,7 +281,7 @@
     <string name="NotificationActionPinnedGeoLiveUser">%1$s ha fissato una posizione in tempo reale</string>
     <string name="NotificationActionPinnedGifUser">%1$s ha fissato una GIF</string>
     <string name="NotificationActionPinnedMusicUser">%1$s ha fissato un file audio</string>
-    <string name="SecretChatName">Telegram</string>
+    <string name="SecretChatName">Tractorgram</string>
     <!--usernames-->
     <string name="Username">Username</string>
     <string name="UsernameAlso">e %1$s</string>

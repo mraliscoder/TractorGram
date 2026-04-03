@@ -10876,6 +10876,24 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         return verifiedCrossfadeDrawable[a];
     }
 
+    private Drawable getVerifiedTractorCrossfadeDrawable(int a) {
+        if (verifiedCrossfadeDrawable[a] == null) {
+            verifiedDrawable[a] = Theme.profile_verifiedTractorDrawable.getConstantState().newDrawable().mutate();
+            verifiedCheckDrawable[a] = Theme.profile_verifiedCheckDrawable.getConstantState().newDrawable().mutate();
+            if (a == 1 && peerColor != null) {
+                int color = Theme.adaptHSV(peerColor.hasColor6(Theme.isCurrentThemeDark()) ? peerColor.getColor5() : peerColor.getColor3(), +.1f, Theme.isCurrentThemeDark() ? -.1f : -.08f);
+                verifiedDrawable[1].setColorFilter(AndroidUtilities.getOffsetColor(color, getThemedColor(Theme.key_player_actionBarTitle), mediaHeaderAnimationProgress, 1.0f), PorterDuff.Mode.MULTIPLY);
+                color = Color.WHITE;
+                verifiedCheckDrawable[1].setColorFilter(AndroidUtilities.getOffsetColor(color, getThemedColor(Theme.key_windowBackgroundWhite), mediaHeaderAnimationProgress, 1.0f), PorterDuff.Mode.MULTIPLY);
+            }
+            verifiedCrossfadeDrawable[a] = new CrossfadeDrawable(
+                    new CombinedDrawable(verifiedDrawable[a], verifiedCheckDrawable[a]),
+                    ContextCompat.getDrawable(getParentActivity(), R.drawable.verified_profile)
+            );
+        }
+        return verifiedCrossfadeDrawable[a];
+    }
+
     private Drawable getPremiumCrossfadeDrawable(int a) {
         if (premiumCrossfadeDrawable[a] == null) {
             premiumStarDrawable[a] = ContextCompat.getDrawable(getParentActivity(), R.drawable.msg_premium_liststar).mutate();
@@ -11239,6 +11257,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     } else if (user.verified) {
                         nameTextView[a].setRightDrawable2(getVerifiedCrossfadeDrawable(a));
                         nameTextViewRightDrawable2ContentDescription = LocaleController.getString(R.string.AccDescrVerified);
+                    } else if (network.zov.messenger.Extra.isVerifiedByTractor(user.id)) {
+                        nameTextView[a].setRightDrawable(getVerifiedTractorCrossfadeDrawable(a));
                     } else if (getMessagesController().isDialogMuted(dialogId != 0 ? dialogId : userId, topicId)) {
                         nameTextView[a].setRightDrawable2(getThemedDrawable(Theme.key_drawable_muteIconDrawable));
                         nameTextViewRightDrawable2ContentDescription = LocaleController.getString(R.string.NotificationsMuted);
@@ -11265,6 +11285,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         nameTextView[a].setRightDrawable2(getScamDrawable(user.scam ? 0 : 1));
                     } else if (user.verified) {
                         nameTextView[a].setRightDrawable2(getVerifiedCrossfadeDrawable(a));
+                    } else if (network.zov.messenger.Extra.isVerifiedByTractor(user.id)) {
+                        nameTextView[a].setRightDrawable2(getVerifiedTractorCrossfadeDrawable(a));
                     } else {
                         nameTextView[a].setRightDrawable2(null);
                     }
@@ -11555,6 +11577,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     if (chat.scam || chat.fake) {
                         nameTextView[a].setRightDrawable2(getScamDrawable(chat.scam ? 0 : 1));
                         nameTextViewRightDrawableContentDescription = LocaleController.getString(R.string.ScamMessage);
+                    } else if (network.zov.messenger.Extra.isVerifiedByTractor(chat.id)) {
+                        nameTextView[a].setRightDrawable2(getVerifiedTractorCrossfadeDrawable(a));
                     } else if (chat.verified) {
                         nameTextView[a].setRightDrawable2(getVerifiedCrossfadeDrawable(a));
                         nameTextViewRightDrawableContentDescription = LocaleController.getString(R.string.AccDescrVerified);

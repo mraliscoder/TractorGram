@@ -3135,6 +3135,7 @@ public class Theme {
     public static Drawable dialogs_muteDrawable;
     public static Drawable dialogs_unmuteDrawable;
     public static Drawable dialogs_verifiedDrawable;
+    public static Drawable dialogs_verifiedTractorDrawable;
     public static ScamDrawable dialogs_scamDrawable;
     public static ScamDrawable dialogs_fakeDrawable;
     public static Drawable dialogs_verifiedCheckDrawable;
@@ -3173,6 +3174,7 @@ public class Theme {
 
     public static TextPaint profile_aboutTextPaint;
     public static Drawable profile_verifiedDrawable;
+    public static Drawable profile_verifiedTractorDrawable;
     public static Drawable profile_verifiedCheckDrawable;
 
     public static Paint chat_docBackPaint;
@@ -8415,6 +8417,7 @@ public class Theme {
             dialogs_muteDrawable = resources.getDrawable(R.drawable.list_mute).mutate();
             dialogs_unmuteDrawable = resources.getDrawable(R.drawable.list_unmute).mutate();
             dialogs_verifiedDrawable = resources.getDrawable(R.drawable.verified_area).mutate();
+            dialogs_verifiedTractorDrawable = resources.getDrawable(R.drawable.verified_area).mutate();
             dialogs_scamDrawable = new ScamDrawable(11, 0);
             dialogs_fakeDrawable = new ScamDrawable(11, 1);
             dialogs_verifiedCheckDrawable = resources.getDrawable(R.drawable.verified_check).mutate();
@@ -8523,6 +8526,7 @@ public class Theme {
 
         setDrawableColorByKey(dialogs_forum_arrowDrawable, key_chats_message);
         setDrawableColorByKey(dialogs_verifiedDrawable, key_chats_verifiedBackground);
+        setDrawableColor(dialogs_verifiedTractorDrawable, Color.parseColor("#00FF00"));
         setDrawableColorByKey(dialogs_verifiedCheckDrawable, key_chats_verifiedCheck);
         setDrawableColorByKey(dialogs_holidayDrawable, key_actionBarDefaultTitle);
         setDrawableColorByKey(dialogs_scamDrawable, key_chats_draft);
@@ -9415,6 +9419,7 @@ public class Theme {
             Resources resources = context.getResources();
 
             profile_verifiedDrawable = resources.getDrawable(R.drawable.verified_area).mutate();
+            profile_verifiedTractorDrawable = resources.getDrawable(R.drawable.verified_area).mutate();
             profile_verifiedCheckDrawable = resources.getDrawable(R.drawable.verified_check).mutate();
 
             applyProfileTheme();
@@ -9444,7 +9449,7 @@ public class Theme {
     }
 
     public static void applyProfileTheme() {
-        if (profile_verifiedDrawable == null) {
+        if (profile_verifiedDrawable == null || profile_verifiedTractorDrawable == null) {
             return;
         }
 
@@ -9452,6 +9457,7 @@ public class Theme {
         profile_aboutTextPaint.linkColor = getColor(key_windowBackgroundWhiteLinkText);
 
         setDrawableColorByKey(profile_verifiedDrawable, key_profile_verifiedBackground);
+        setDrawableColor(profile_verifiedTractorDrawable, Color.parseColor("#00FF00"));
         setDrawableColorByKey(profile_verifiedCheckDrawable, key_profile_verifiedCheck);
     }
 

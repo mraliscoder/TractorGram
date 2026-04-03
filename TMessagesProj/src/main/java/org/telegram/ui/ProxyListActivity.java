@@ -86,6 +86,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
     private boolean useProxyForCalls;
 
     private int rowCount;
+    private int builtInProxiesRow;
     @Keep
     private int useProxyRow;
     private int useProxyShadowRow;
@@ -175,6 +176,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
         public void setProxy(SharedConfig.ProxyInfo proxyInfo) {
             textView.setText(proxyInfo.address + ":" + proxyInfo.port);
             currentInfo = proxyInfo;
+            checkDrawable = null;
         }
 
         public void updateStatus() {
@@ -296,7 +298,9 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
         public void setChecked(boolean checked) {
             if (checked) {
                 if (checkDrawable == null) {
-                    checkDrawable = getResources().getDrawable(R.drawable.proxy_check).mutate();
+                    boolean isFakeTls = currentInfo != null && currentInfo.secret != null
+                            && currentInfo.secret.length() > 17 && currentInfo.secret.startsWith("fe");
+                    checkDrawable = getResources().getDrawable(isFakeTls ? R.drawable.notification : R.drawable.proxy_check).mutate();
                 }
                 if (checkDrawable != null) {
                     checkDrawable.setColorFilter(new PorterDuffColorFilter(color, PorterDuff.Mode.MULTIPLY));
@@ -391,7 +395,27 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
         frameLayout.addView(listView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP | Gravity.LEFT));
         listView.setAdapter(listAdapter);
         listView.setOnItemClickListener((view, position) -> {
-            if (position == useProxyRow) {
+            if (position == builtInProxiesRow) {
+                boolean newEnabled = !network.zov.messenger.RemoteConfig.isBuiltInProxiesEnabled();
+                if (newEnabled) {
+                    // Disable regular proxy first if it was active
+                    if (useProxySettings) {
+                        useProxySettings = false;
+                        MessagesController.getGlobalMainSettings().edit()
+                                .putBoolean("proxy_enabled", false).commit();
+                    }
+                    network.zov.messenger.RemoteConfig.setBuiltInProxiesEnabled(true);
+                } else {
+                    network.zov.messenger.RemoteConfig.setBuiltInProxiesEnabled(false);
+                }
+                TextCheckCell builtInCell = (TextCheckCell) view;
+                builtInCell.setChecked(newEnabled);
+                updateRows(true);
+            } else if (position == useProxyRow) {
+                // Disable built-in proxies silently when the user manually enables a regular proxy
+                if (network.zov.messenger.RemoteConfig.isBuiltInProxiesEnabled()) {
+                    network.zov.messenger.RemoteConfig.disableBuiltInProxySilently();
+                }
                 if (SharedConfig.currentProxy == null) {
                     if (!proxyList.isEmpty()) {
                         SharedConfig.currentProxy = proxyList.get(0);
@@ -461,6 +485,10 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                 if (!selectedItems.isEmpty()) {
                     listAdapter.toggleSelected(position);
                     return;
+                }
+                // Switching to a manual proxy disables built-in proxies silently
+                if (network.zov.messenger.RemoteConfig.isBuiltInProxiesEnabled()) {
+                    network.zov.messenger.RemoteConfig.disableBuiltInProxySilently();
                 }
                 SharedConfig.ProxyInfo info = proxyList.get(position - proxyStartRow);
                 useProxySettings = true;
@@ -623,6 +651,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
 
     private void updateRows(boolean notify) {
         rowCount = 0;
+        builtInProxiesRow = rowCount++;
         useProxyRow = rowCount++;
         if (useProxySettings && SharedConfig.currentProxy != null && SharedConfig.proxyList.size() > 1 && IS_PROXY_ROTATION_AVAILABLE) {
             rotationRow = rowCount++;
@@ -902,8 +931,13 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                 }
                 case VIEW_TYPE_TEXT_CHECK: {
                     TextCheckCell checkCell = (TextCheckCell) holder.itemView;
-                    if (position == useProxyRow) {
+                    if (position == builtInProxiesRow) {
+                        boolean builtInEnabled = network.zov.messenger.RemoteConfig.isBuiltInProxiesEnabled();
+                        checkCell.setTextAndCheck("Встроенные прокси", builtInEnabled, true);
+                        checkCell.setEnabled(true);
+                    } else if (position == useProxyRow) {
                         checkCell.setTextAndCheck(LocaleController.getString(R.string.UseProxySettings), useProxySettings, rotationRow != -1);
+                        checkCell.setEnabled(!network.zov.messenger.RemoteConfig.isBuiltInProxiesEnabled());
                     } else if (position == callsRow) {
                         checkCell.setTextAndCheck(LocaleController.getString(R.string.UseProxyForCalls), useProxyForCalls, false);
                     } else if (position == rotationRow) {
@@ -961,8 +995,11 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                 }
             } else if (holder.getItemViewType() == VIEW_TYPE_TEXT_CHECK && payloads.contains(PAYLOAD_CHECKED_CHANGED)) {
                 TextCheckCell checkCell = (TextCheckCell) holder.itemView;
-                if (position == useProxyRow) {
+                if (position == builtInProxiesRow) {
+                    checkCell.setChecked(network.zov.messenger.RemoteConfig.isBuiltInProxiesEnabled());
+                } else if (position == useProxyRow) {
                     checkCell.setChecked(useProxySettings);
+                    checkCell.setEnabled(!network.zov.messenger.RemoteConfig.isBuiltInProxiesEnabled());
                 } else if (position == callsRow) {
                     checkCell.setChecked(useProxyForCalls);
                 } else if (position == rotationRow) {
@@ -979,8 +1016,12 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
             if (viewType == VIEW_TYPE_TEXT_CHECK) {
                 TextCheckCell checkCell = (TextCheckCell) holder.itemView;
                 int position = holder.getAdapterPosition();
-                if (position == useProxyRow) {
+                if (position == builtInProxiesRow) {
+                    checkCell.setChecked(network.zov.messenger.RemoteConfig.isBuiltInProxiesEnabled());
+                    checkCell.setEnabled(true);
+                } else if (position == useProxyRow) {
                     checkCell.setChecked(useProxySettings);
+                    checkCell.setEnabled(!network.zov.messenger.RemoteConfig.isBuiltInProxiesEnabled());
                 } else if (position == callsRow) {
                     checkCell.setChecked(useProxyForCalls);
                 } else if (position == rotationRow) {
@@ -992,7 +1033,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
         @Override
         public boolean isEnabled(RecyclerView.ViewHolder holder) {
             int position = holder.getAdapterPosition();
-            return position == useProxyRow || position == rotationRow || position == callsRow || position == proxyAddRow || position == deleteAllRow || position >= proxyStartRow && position < proxyEndRow;
+            return position == builtInProxiesRow || position == useProxyRow || position == rotationRow || position == callsRow || position == proxyAddRow || position == deleteAllRow || position >= proxyStartRow && position < proxyEndRow;
         }
 
         @Override
@@ -1042,6 +1083,8 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                 return -3;
             } else if (position == useProxyRow) {
                 return -4;
+            } else if (position == builtInProxiesRow) {
+                return -12;
             } else if (position == callsRow) {
                 return -5;
             } else if (position == connectionsHeaderRow) {
@@ -1067,7 +1110,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                 return VIEW_TYPE_SHADOW;
             } else if (position == proxyAddRow || position == deleteAllRow) {
                 return VIEW_TYPE_TEXT_SETTING;
-            } else if (position == useProxyRow || position == rotationRow || position == callsRow) {
+            } else if (position == builtInProxiesRow || position == useProxyRow || position == rotationRow || position == callsRow) {
                 return VIEW_TYPE_TEXT_CHECK;
             } else if (position == connectionsHeaderRow) {
                 return VIEW_TYPE_HEADER;

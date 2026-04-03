@@ -446,6 +446,100 @@ private:
     }
 };
 
+bool ConnectionSocket::initRealTLS(const std::string &domain) {
+    // Temporarily switch to blocking mode for the TLS handshake
+    int flags = fcntl(socketFd, F_GETFL, 0);
+    fcntl(socketFd, F_SETFL, flags & ~O_NONBLOCK);
+
+    sslCtx = SSL_CTX_new(TLS_client_method());
+    if (!sslCtx) {
+        if (LOGS_ENABLED) DEBUG_E("connection(%p) SSL_CTX_new failed", this);
+        fcntl(socketFd, F_SETFL, flags);
+        return false;
+    }
+    SSL_CTX_set_min_proto_version(sslCtx, TLS1_2_VERSION);
+    SSL_CTX_set_verify(sslCtx, SSL_VERIFY_NONE, nullptr);
+
+    sslConn = SSL_new(sslCtx);
+    if (!sslConn) {
+        if (LOGS_ENABLED) DEBUG_E("connection(%p) SSL_new failed", this);
+        SSL_CTX_free(sslCtx);
+        sslCtx = nullptr;
+        fcntl(socketFd, F_SETFL, flags);
+        return false;
+    }
+    if (SSL_set_fd(sslConn, socketFd) != 1) {
+        if (LOGS_ENABLED) DEBUG_E("connection(%p) SSL_set_fd failed", this);
+        SSL_free(sslConn);
+        sslConn = nullptr;
+        SSL_CTX_free(sslCtx);
+        sslCtx = nullptr;
+        fcntl(socketFd, F_SETFL, flags);
+        return false;
+    }
+    if (!domain.empty()) {
+        SSL_set_tlsext_host_name(sslConn, domain.c_str());
+    }
+    static const unsigned char alpnProtos[] = "\x02h2\x08http/1.1";
+    SSL_set_alpn_protos(sslConn, alpnProtos, sizeof(alpnProtos) - 1);
+
+    int ret = SSL_connect(sslConn);
+    // Restore non-blocking mode regardless of outcome
+    fcntl(socketFd, F_SETFL, flags);
+    if (ret != 1) {
+        int err = SSL_get_error(sslConn, ret);
+        if (LOGS_ENABLED) DEBUG_E("connection(%p) SSL_connect failed err=%d", this, err);
+        cleanupRealTLS();
+        return false;
+    }
+    if (LOGS_ENABLED) DEBUG_D("connection(%p) real TLS handshake complete, cipher=%s", this, SSL_get_cipher(sslConn));
+    useRealTLS = true;
+    return true;
+}
+
+void ConnectionSocket::cleanupRealTLS() {
+    if (sslConn) {
+        SSL_shutdown(sslConn);
+        SSL_free(sslConn);
+        sslConn = nullptr;
+    }
+    if (sslCtx) {
+        SSL_CTX_free(sslCtx);
+        sslCtx = nullptr;
+    }
+    useRealTLS = false;
+}
+
+ssize_t ConnectionSocket::tlsSend(const void *buf, size_t len) {
+    if (useRealTLS && sslConn) {
+        int written = SSL_write(sslConn, buf, (int) len);
+        if (written <= 0) {
+            int err = SSL_get_error(sslConn, written);
+            if (LOGS_ENABLED) DEBUG_E("connection(%p) SSL_write error=%d", this, err);
+            return -1;
+        }
+        return (ssize_t) written;
+    }
+    return send(socketFd, buf, len, 0);
+}
+
+ssize_t ConnectionSocket::tlsRecv(void *buf, size_t len) {
+    if (useRealTLS && sslConn) {
+        int n = SSL_read(sslConn, buf, (int) len);
+        if (n <= 0) {
+            int err = SSL_get_error(sslConn, n);
+            if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) {
+                errno = EAGAIN;
+                return -1;
+            }
+            if (LOGS_ENABLED) DEBUG_E("connection(%p) SSL_read error=%d", this, err);
+            return -1;
+        }
+        return (ssize_t) n;
+    }
+    return recv(socketFd, buf, len, 0);
+}
+
 ConnectionSocket::ConnectionSocket(int32_t instance) {
     instanceNum = instance;
     outgoingByteStream = new ByteStream();
@@ -454,6 +548,7 @@ ConnectionSocket::ConnectionSocket(int32_t instance) {
 }
 
 ConnectionSocket::~ConnectionSocket() {
+    cleanupRealTLS();
     if (outgoingByteStream != nullptr) {
         delete outgoingByteStream;
         outgoingByteStream = nullptr;
@@ -510,6 +605,11 @@ void ConnectionSocket::openConnection(std::string address, uint16_t port, std::s
             currentSecret = proxySecret->substr(1, 16);
             currentSecretDomain = proxySecret->substr(17);
             tempBuffLength = 65 * 1024;
+        } else if (proxySecret->size() > 17 && (uint8_t)(*proxySecret)[0] == 0xfe) {
+            proxyAuthState = 20;
+            currentSecret = proxySecret->substr(1, 16);
+            currentSecretDomain = proxySecret->substr(17);
+            tempBuffLength = 0;
         } else {
             proxyAuthState = 0;
             tempBuffLength = 0;
@@ -595,6 +695,11 @@ void ConnectionSocket::openConnection(std::string address, uint16_t port, std::s
             currentSecret = secret.substr(1, 16);
             currentSecretDomain = secret.substr(17);
             tempBuffLength = 65 * 1024;
+        } else if (secret.size() > 17 && (uint8_t)secret[0] == 0xfe) {
+            proxyAuthState = 20;
+            currentSecret = secret.substr(1, 16);
+            currentSecretDomain = secret.substr(17);
+            tempBuffLength = 0;
         } else {
             proxyAuthState = 0;
             tempBuffLength = 0;
@@ -665,6 +770,7 @@ int32_t ConnectionSocket::checkSocketError(int32_t *error) {
 }
 
 void ConnectionSocket::closeSocket(int32_t reason, int32_t error) {
+    cleanupRealTLS();
     lastEventTime = ConnectionsManager::getInstance(instanceNum).getCurrentTimeMonotonicMillis();
     ConnectionsManager::getInstance(instanceNum).detachConnection(this);
     if (socketFd >= 0) {
@@ -698,7 +804,7 @@ void ConnectionSocket::onEvent(uint32_t events) {
             NativeByteBuffer *buffer = ConnectionsManager::getInstance(instanceNum).networkBuffer;
             while (true) {
                 buffer->rewind();
-                readCount = recv(socketFd, buffer->bytes(), READ_BUFFER_SIZE, 0);
+                readCount = tlsRecv(buffer->bytes(), READ_BUFFER_SIZE);
                 int err = errno;
 //                if (LOGS_ENABLED) DEBUG_D("connection(%p) recv resulted with %d, errno=%d", this, readCount, err);
                 if (readCount < 0) {
@@ -915,7 +1021,15 @@ void ConnectionSocket::onEvent(uint32_t events) {
             return;
         } else {
             if (proxyAuthState != 0) {
-                if (proxyAuthState >= 10) {
+                if (proxyAuthState == 20) {
+                    lastEventTime = ConnectionsManager::getInstance(instanceNum).getCurrentTimeMonotonicMillis();
+                    if (!initRealTLS(currentSecretDomain)) {
+                        closeSocket(1, -1);
+                        return;
+                    }
+                    proxyAuthState = 0;
+                    adjustWriteOp();
+                } else if (proxyAuthState >= 10) {
                     if (proxyAuthState == 10) {
                         lastEventTime = ConnectionsManager::getInstance(instanceNum).getCurrentTimeMonotonicMillis();
                         tlsHashMismatch = false;
@@ -1031,7 +1145,7 @@ void ConnectionSocket::onEvent(uint32_t events) {
 
                         std::memcpy(tempBuffer->bytes + headersSize, buffer->bytes(), remaining);
 
-                        if ((sentLength = send(socketFd, tempBuffer->bytes, headersSize + remaining, 0)) < headersSize) {
+                        if ((sentLength = tlsSend(tempBuffer->bytes, headersSize + remaining)) < (ssize_t) headersSize) {
                             if (LOGS_ENABLED) DEBUG_E("connection(%p) send failed", this);
                             closeSocket(1, -1);
                             return;
@@ -1043,7 +1157,7 @@ void ConnectionSocket::onEvent(uint32_t events) {
                             adjustWriteOp();
                         }
                     } else {
-                        if ((sentLength = send(socketFd, buffer->bytes(), remaining, 0)) < 0) {
+                        if ((sentLength = tlsSend(buffer->bytes(), remaining)) < 0) {
                             if (LOGS_ENABLED) DEBUG_D("connection(%p) send failed", this);
                             closeSocket(1, -1);
                             return;
@@ -1092,7 +1206,7 @@ void ConnectionSocket::adjustWriteOp() {
         return;
     }
     eventMask.events = EPOLLIN | EPOLLRDHUP | EPOLLERR | EPOLLET;
-    if (proxyAuthState == 0 && (outgoingByteStream->hasData() || !onConnectedSent) || proxyAuthState == 1 || proxyAuthState == 3 || proxyAuthState == 5 || proxyAuthState == 10) {
+    if (proxyAuthState == 0 && (outgoingByteStream->hasData() || !onConnectedSent) || proxyAuthState == 1 || proxyAuthState == 3 || proxyAuthState == 5 || proxyAuthState == 10 || proxyAuthState == 20) {
         eventMask.events |= EPOLLOUT;
     }
     eventMask.data.ptr = eventObject;

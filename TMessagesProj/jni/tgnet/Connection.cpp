@@ -213,7 +213,7 @@ void Connection::onReceivedData(NativeByteBuffer *buffer) {
             len = currentPacketLength + 4;
         }
 
-        if (currentProtocolType != ProtocolTypeDD && currentProtocolType != ProtocolTypeTLS && currentPacketLength % 4 != 0 || currentPacketLength > 2 * 1024 * 1024) {
+        if (currentProtocolType != ProtocolTypeDD && currentProtocolType != ProtocolTypeTLS && currentProtocolType != ProtocolTypeRealTLS && currentPacketLength % 4 != 0 || currentPacketLength > 2 * 1024 * 1024) {
             if (LOGS_ENABLED) DEBUG_D("connection(%p, account%u, dc%u, type %d) received invalid packet length", this, currentDatacenter->instanceNum, currentDatacenter->getDatacenterId(), connectionType);
             reconnect();
             break;
@@ -424,7 +424,7 @@ void Connection::setHasUsefullData() {
 }
 
 bool Connection::allowsCustomPadding() {
-    return currentProtocolType == ProtocolTypeTLS || currentProtocolType == ProtocolTypeDD || currentProtocolType == ProtocolTypeEF;
+    return currentProtocolType == ProtocolTypeTLS || currentProtocolType == ProtocolTypeDD || currentProtocolType == ProtocolTypeEF || currentProtocolType == ProtocolTypeRealTLS;
 }
 
 void Connection::sendData(NativeByteBuffer *buff, bool reportAck, bool encrypted) {
@@ -464,6 +464,8 @@ void Connection::sendData(NativeByteBuffer *buff, bool reportAck, bool encrypted
                 currentProtocolType = ProtocolTypeDD;
             } else if (currentSecret->length() > 17 && (*currentSecret)[0] == '\xee') {
                 currentProtocolType = ProtocolTypeTLS;
+            } else if (currentSecret->length() > 17 && (uint8_t)(*currentSecret)[0] == 0xfe) {
+                currentProtocolType = ProtocolTypeRealTLS;
             } else {
                 currentProtocolType = ProtocolTypeEF;
             }
@@ -482,7 +484,7 @@ void Connection::sendData(NativeByteBuffer *buff, bool reportAck, bool encrypted
         }
     } else {
         packetLength = buff->limit();
-        if (currentProtocolType == ProtocolTypeDD || currentProtocolType == ProtocolTypeTLS) {
+        if (currentProtocolType == ProtocolTypeDD || currentProtocolType == ProtocolTypeTLS || currentProtocolType == ProtocolTypeRealTLS) {
             RAND_bytes((uint8_t *) &additinalPacketSize, 4);
             if (!encrypted) {
                 additinalPacketSize = additinalPacketSize % 257;
@@ -524,10 +526,10 @@ void Connection::sendData(NativeByteBuffer *buff, bool reportAck, bool encrypted
             RAND_bytes(bytes, 64);
             uint32_t val = (bytes[3] << 24) | (bytes[2] << 16) | (bytes[1] << 8) | (bytes[0]);
             uint32_t val2 = (bytes[7] << 24) | (bytes[6] << 16) | (bytes[5] << 8) | (bytes[4]);
-            if (currentProtocolType == ProtocolTypeTLS || bytes[0] != 0xef && val != 0x44414548 && val != 0x54534f50 && val != 0x20544547 && val != 0x4954504f && val != 0xeeeeeeee && val != 0xdddddddd && val != 0x02010316 && val2 != 0x00000000) {
+            if (currentProtocolType == ProtocolTypeTLS || currentProtocolType == ProtocolTypeRealTLS || bytes[0] != 0xef && val != 0x44414548 && val != 0x54534f50 && val != 0x20544547 && val != 0x4954504f && val != 0xeeeeeeee && val != 0xdddddddd && val != 0x02010316 && val2 != 0x00000000) {
                 if (currentProtocolType == ProtocolTypeEF) {
                     bytes[56] = bytes[57] = bytes[58] = bytes[59] = 0xef;
-                } else if (currentProtocolType == ProtocolTypeDD || currentProtocolType == ProtocolTypeTLS) {
+                } else if (currentProtocolType == ProtocolTypeDD || currentProtocolType == ProtocolTypeTLS || currentProtocolType == ProtocolTypeRealTLS) {
                     bytes[56] = bytes[57] = bytes[58] = bytes[59] = 0xdd;
                 } else if (currentProtocolType == ProtocolTypeEE) {
                     bytes[56] = bytes[57] = bytes[58] = bytes[59] = 0xee;
@@ -638,7 +640,7 @@ inline void Connection::encryptKeyWithSecret(uint8_t *bytes, uint8_t secretType)
     std::string *currentSecret = getCurrentSecret(secretType);
     size_t a = 0;
     size_t size = std::min((size_t) 16, currentSecret->length());
-    if (currentSecret->length() >= 17 && ((*currentSecret)[0] == '\xdd' || (*currentSecret)[0] == '\xee')) {
+    if (currentSecret->length() >= 17 && ((*currentSecret)[0] == '\xdd' || (*currentSecret)[0] == '\xee' || (uint8_t)(*currentSecret)[0] == 0xfe)) {
         a = 1;
         size = 17;
     }
