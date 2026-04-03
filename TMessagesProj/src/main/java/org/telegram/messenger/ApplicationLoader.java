@@ -171,7 +171,7 @@ public class ApplicationLoader extends Application {
         } catch (Exception e) {
             FileLog.e(e);
         }
-        return new File("/data/data/org.telegram.messenger/files");
+        return new File("/data/data/network.zov.messenger/files");
     }
 
     public static File getFilesDirFixed(String child) {
@@ -272,6 +272,7 @@ public class ApplicationLoader extends Application {
             DownloadController.getInstance(a);
         }
         BillingController.getInstance().startConnection();
+        network.zov.messenger.RemoteConfig.start();
     }
 
     public ApplicationLoader() {

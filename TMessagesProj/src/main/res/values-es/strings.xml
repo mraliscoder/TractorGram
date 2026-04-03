@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="AppName">Telegram</string>
-    <string name="AppNameBeta">Telegram Beta</string>
+    <string name="AppName">Tractorgram</string>
+    <string name="AppNameBeta">Tractorgram Beta</string>
     <string name="LanguageName">Español</string>
     <string name="English">Inglés</string>
     <string name="LanguageNameInEnglish">Spanish</string>
@@ -180,8 +180,8 @@
     <string name="NotificationGroupFew">%1$s envió %3$s al grupo %2$s</string>
     <string name="NotificationGroupAlbum">%1$s envió un álbum al grupo %2$s</string>
     <string name="NotificationGroupForwardedFew">%1$s reenvió %3$s al grupo %2$s</string>
-    <string name="NotificationHiddenName">Telegram</string>
-    <string name="NotificationHiddenChatName">Telegram</string>
+    <string name="NotificationHiddenName">Tractorgram</string>
+    <string name="NotificationHiddenChatName">Tractorgram</string>
     <string name="NotificationHiddenChatUserName">Usuario</string>
     <string name="NotificationHiddenMessage">Mensaje nuevo</string>
     <string name="Reply">Responder</string>
@@ -245,7 +245,7 @@
     <string name="NotificationActionPinnedGeoLiveUser">%1$s fijó una ubicación en tiempo real</string>
     <string name="NotificationActionPinnedGifUser">%1$s fijó un GIF</string>
     <string name="NotificationActionPinnedMusicUser">%1$s fijó un audio</string>
-    <string name="SecretChatName">Telegram</string>
+    <string name="SecretChatName">Tractorgram</string>
     <!--usernames-->
     <string name="Username">Nombre de usuario</string>
     <string name="UsernameAlso">también %1$s</string>
@@ -1258,7 +1258,7 @@
     <string name="PermissionDrawAboveOtherAppsTitle">Modo imagen en imagen</string>
     <string name="PermissionDrawAboveOtherAppsGroupCallTitle">Superposición del videochat</string>
     <!--Intro view-->
-    <string name="Page1Title">Telegram</string>
+    <string name="Page1Title">Tractorgram</string>
     <string name="Page2Title">Rápido</string>
     <string name="Page3Title">Gratuito</string>
     <string name="Page4Title">Seguro</string>

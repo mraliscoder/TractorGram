@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="AppName">Telegram</string>
-    <string name="AppNameBeta">Telegram Beta</string>
+    <string name="AppName">Tractorgram</string>
+    <string name="AppNameBeta">Tractorgram Beta</string>
     <string name="LanguageName">Deutsch</string>
     <string name="English">Englisch</string>
     <string name="LanguageNameInEnglish">German</string>
@@ -180,8 +180,8 @@
     <string name="NotificationGroupFew">%1$s hat %3$s an die Gruppe %2$s gesendet</string>
     <string name="NotificationGroupAlbum">%1$s hat ein Album an die Gruppe %2$s gesendet</string>
     <string name="NotificationGroupForwardedFew">%1$s hat %3$s an die Gruppe %2$s weitergeleitet</string>
-    <string name="NotificationHiddenName">Telegram</string>
-    <string name="NotificationHiddenChatName">Telegram</string>
+    <string name="NotificationHiddenName">Tractorgram</string>
+    <string name="NotificationHiddenChatName">Tractorgram</string>
     <string name="NotificationHiddenChatUserName">Nutzer</string>
     <string name="NotificationHiddenMessage">Neue Nachricht</string>
     <string name="Reply">Antworten</string>
@@ -245,7 +245,7 @@
     <string name="NotificationActionPinnedGeoLiveUser">%1$s hat einen Live-Standort angeheftet</string>
     <string name="NotificationActionPinnedGifUser">%1$s hat ein GIF angeheftet</string>
     <string name="NotificationActionPinnedMusicUser">%1$s hat eine Audiodatei angeheftet</string>
-    <string name="SecretChatName">Telegram</string>
+    <string name="SecretChatName">Tractorgram</string>
     <!--settings view-->
     <string name="ResetNotificationsText">Einstellungen wurden zurückgesetzt</string>
     <string name="ResetNotificationsAlertTitle">Benachrichtigungen zurücksetzen</string>

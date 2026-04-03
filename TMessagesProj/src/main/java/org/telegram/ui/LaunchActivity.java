@@ -389,6 +389,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         }
         instance = this;
         ApplicationLoader.postInitApplication();
+        network.zov.messenger.RemoteConfig.onVersionOutdated = this::showVersionOutdatedDialog;
         AndroidUtilities.checkDisplaySize(this, getResources().getConfiguration());
         currentAccount = UserConfig.selectedAccount;
         registerReceiver(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
@@ -1231,6 +1232,29 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         }
     }
 
+    private boolean versionOutdatedDialogShown = false;
+
+    private void showVersionOutdatedDialog() {
+        if (versionOutdatedDialogShown || isFinishing()) return;
+        versionOutdatedDialogShown = true;
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Доступно обновление");
+        builder.setMessage("Выпущена новая версия приложения. Обновите его для лучшей работы.");
+        builder.setPositiveButton("Перейти к обновлению", (dialog, which) -> {
+            String channel = network.zov.messenger.RemoteConfig.officialChannel;
+            if (!channel.isEmpty()) {
+                try {
+                    android.content.Intent intent = new android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse("tg://resolve?domain=" + channel));
+                    startActivity(intent);
+                } catch (Exception ignored) {}
+            }
+        });
+        builder.setNegativeButton("Позже", null);
+        builder.show();
+    }
+
     public static void clearFragments() {
         for (BaseFragment fragment : mainFragmentsStack) {
             fragment.onFragmentDestroy();
@@ -1723,7 +1747,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                     if (error) {
                         Toast.makeText(this, "Unsupported content", Toast.LENGTH_SHORT).show();
                     }
-                } else if ("org.telegram.messenger.CREATE_STICKER_PACK".equals(intent.getAction())) {
+                } else if ("network.zov.messenger.CREATE_STICKER_PACK".equals(intent.getAction())) {
                     try {
                         importingStickers = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
                         importingStickersEmoji = intent.getStringArrayListExtra("STICKER_EMOJIS");
@@ -2814,7 +2838,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                             }
                         }
                     }
-                } else if (intent.getAction().equals("org.telegram.messenger.OPEN_ACCOUNT")) {
+                } else if (intent.getAction().equals("network.zov.messenger.OPEN_ACCOUNT")) {
                     open_settings = 1;
                 } else if (intent.getAction().equals("new_dialog")) {
                     open_new_dialog = 1;

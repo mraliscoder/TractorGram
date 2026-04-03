@@ -12,6 +12,8 @@
 #include <sys/epoll.h>
 #include <netinet/in.h>
 #include <string>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
 
 class NativeByteBuffer;
 class ConnectionsManager;
@@ -46,6 +48,11 @@ protected:
     virtual void onConnected() = 0;
     virtual bool hasPendingRequests() = 0;
 
+    bool initRealTLS(const std::string &domain);
+    void cleanupRealTLS();
+    ssize_t tlsSend(const void *buf, size_t len);
+    ssize_t tlsRecv(void *buf, size_t len);
+
     std::string overrideProxyUser = "";
     std::string overrideProxyPassword = "";
     std::string overrideProxyAddress = "";
@@ -79,6 +86,10 @@ private:
     ByteArray *tempBuffer = nullptr;
     size_t bytesRead = 0;
     int8_t tlsState = 0;
+
+    SSL_CTX *sslCtx = nullptr;
+    SSL     *sslConn = nullptr;
+    bool     useRealTLS = false;
 
     uint8_t proxyAuthState;
 
