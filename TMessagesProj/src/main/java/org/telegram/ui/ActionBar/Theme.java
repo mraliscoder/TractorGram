@@ -8417,7 +8417,7 @@ public class Theme {
             dialogs_muteDrawable = resources.getDrawable(R.drawable.list_mute).mutate();
             dialogs_unmuteDrawable = resources.getDrawable(R.drawable.list_unmute).mutate();
             dialogs_verifiedDrawable = resources.getDrawable(R.drawable.verified_area).mutate();
-            dialogs_verifiedTractorDrawable = resources.getDrawable(R.drawable.verified_area).mutate();
+            dialogs_verifiedTractorDrawable = resources.getDrawable(R.drawable.verified_tractor_area).mutate();
             dialogs_scamDrawable = new ScamDrawable(11, 0);
             dialogs_fakeDrawable = new ScamDrawable(11, 1);
             dialogs_verifiedCheckDrawable = resources.getDrawable(R.drawable.verified_check).mutate();
@@ -9419,7 +9419,7 @@ public class Theme {
             Resources resources = context.getResources();
 
             profile_verifiedDrawable = resources.getDrawable(R.drawable.verified_area).mutate();
-            profile_verifiedTractorDrawable = resources.getDrawable(R.drawable.verified_area).mutate();
+            profile_verifiedTractorDrawable = resources.getDrawable(R.drawable.verified_tractor_area).mutate();
             profile_verifiedCheckDrawable = resources.getDrawable(R.drawable.verified_check).mutate();
 
             applyProfileTheme();

@@ -675,6 +675,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private int botAppRow;
     private int unofficialSecurityRiskRow;
     private int unofficialSecurityRiskDividerRow;
+    private int tractorVerifiedRow;
+    private int tractorVerifiedDividerRow;
     private int botPermissionsHeader;
     @Keep
     private int botPermissionLocation;
@@ -10309,6 +10311,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         botPermissionsDivider = -1;
         unofficialSecurityRiskRow = -1;
         unofficialSecurityRiskDividerRow = -1;
+        tractorVerifiedRow = -1;
+        tractorVerifiedDividerRow = -1;
 
         sendMessageRow = -1;
         reportRow = -1;
@@ -10498,6 +10502,11 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 if (!isBot && userInfo != null && userInfo.unofficial_security_risk) {
                     unofficialSecurityRiskRow = rowCount++;
                     unofficialSecurityRiskDividerRow = rowCount++;
+                }
+
+                if (!isBot && network.zov.messenger.Extra.isVerifiedByTractor(userId)) {
+                    tractorVerifiedRow = rowCount++;
+                    tractorVerifiedDividerRow = rowCount++;
                 }
 
                 if (userInfo != null && (userInfo.flags2 & 64) != 0 && (profileChannelMessageFetcher == null || !profileChannelMessageFetcher.loaded || !profileChannelMessageFetcher.messageObjects.isEmpty())) {
@@ -13461,6 +13470,16 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         sb.append(" ");
                         sb.append(formatString(R.string.ProfileUnofficialSecurityRisk, UserObject.getForcedFirstName(getMessagesController().getUser(userId))));
                         textView.setText(sb);
+                    } else if (position == tractorVerifiedRow) {
+                        final SpannableStringBuilder sb = new SpannableStringBuilder("✅");
+                        final ColoredImageSpan span = new ColoredImageSpan(R.drawable.verified_profile);
+                        span.translate(0, dp(1));
+                        span.setOverrideColor(Theme.getColor(Theme.key_color_green, resourcesProvider));
+                        sb.setSpan(span, 0, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                        sb.append(" ");
+                        sb.append(UserObject.getForcedFirstName(getMessagesController().getUser(userId)));
+                        sb.append(" верифицирован командой Tractorgram");
+                        textView.setText(sb);
                     }
                     break;
                 case VIEW_TYPE_PREMIUM_TEXT_CELL:
@@ -14110,7 +14129,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     position == helpSectionCell || position == setAvatarSectionRow || position == passwordSuggestionSectionRow ||
                     position == phoneSuggestionSectionRow || position == premiumSectionsRow || position == reportDividerRow ||
                     position == channelDividerRow || position == graceSuggestionSectionRow || position == balanceDividerRow ||
-                    position == botPermissionsDivider || position == channelBalanceSectionRow || position == unofficialSecurityRiskDividerRow
+                    position == botPermissionsDivider || position == channelBalanceSectionRow || position == unofficialSecurityRiskDividerRow || position == tractorVerifiedDividerRow
             ) {
                 return VIEW_TYPE_SHADOW;
             } else if (position >= membersStartRow && position < membersEndRow) {
@@ -14143,7 +14162,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 return VIEW_TYPE_BOT_APP;
             } else if (position == infoSectionRow || position == infoAffiliateRow) {
                 return VIEW_TYPE_SHADOW_TEXT;
-            } else if (position == unofficialSecurityRiskRow) {
+            } else if (position == unofficialSecurityRiskRow || position == tractorVerifiedRow) {
                 return VIEW_TYPE_TEXT2;
             } else if (position == affiliateRow) {
                 return VIEW_TYPE_COLORFUL_TEXT;
@@ -15488,6 +15507,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             put(++pointer, affiliateRow, sparseIntArray);
             put(++pointer, infoAffiliateRow, sparseIntArray);
             put(++pointer, unofficialSecurityRiskRow, sparseIntArray);
+            put(++pointer, tractorVerifiedRow, sparseIntArray);
             put(++pointer, sendMessageRow, sparseIntArray);
             put(++pointer, reportRow, sparseIntArray);
             put(++pointer, reportReactionRow, sparseIntArray);
@@ -15527,6 +15547,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             put(++pointer, botPermissionsDivider, sparseIntArray);
             put(++pointer, channelDividerRow, sparseIntArray);
             put(++pointer, unofficialSecurityRiskDividerRow, sparseIntArray);
+            put(++pointer, tractorVerifiedDividerRow, sparseIntArray);
         }
 
         private void put(int id, int position, SparseIntArray sparseIntArray) {
