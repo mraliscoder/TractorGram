@@ -8418,6 +8418,7 @@ public class Theme {
             dialogs_unmuteDrawable = resources.getDrawable(R.drawable.list_unmute).mutate();
             dialogs_verifiedDrawable = resources.getDrawable(R.drawable.verified_area).mutate();
             dialogs_verifiedTractorDrawable = resources.getDrawable(R.drawable.verified_tractor_area).mutate();
+            dialogs_verifiedTractorDrawable = resources.getDrawable(R.drawable.verified_area).mutate();
             dialogs_scamDrawable = new ScamDrawable(11, 0);
             dialogs_fakeDrawable = new ScamDrawable(11, 1);
             dialogs_verifiedCheckDrawable = resources.getDrawable(R.drawable.verified_check).mutate();
