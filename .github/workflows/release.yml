@@ -3,7 +3,7 @@ name: Release Build
 on:
   push:
     branches:
-      - telegram-changes
+      - tractorgram-changes
 
 jobs:
   build:
