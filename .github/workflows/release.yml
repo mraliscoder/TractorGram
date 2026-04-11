@@ -37,7 +37,7 @@ jobs:
 
       - name: Build release APK
         run: |
-          ./gradlew :TMessagesProj_App:assembleAfatRelease \
+          ./gradlew :TMessagesProj_App:assembleRelease \
             -PRELEASE_STORE_PASSWORD="${{ secrets.RELEASE_STORE_PASSWORD }}" \
             -PRELEASE_KEY_ALIAS="${{ secrets.RELEASE_KEY_ALIAS }}" \
             -PRELEASE_KEY_PASSWORD="${{ secrets.RELEASE_KEY_PASSWORD }}"
@@ -48,7 +48,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-apk-${{ github.sha }}
-          path: TMessagesProj_App/afat/release/app.apk
+          path: TMessagesProj_App/**/app.apk
           retention-days: 30
 
       - name: Get version info
@@ -64,5 +64,5 @@ jobs:
         with:
           tag_name: v${{ steps.version.outputs.name }}-${{ steps.version.outputs.code }}
           name: Release ${{ steps.version.outputs.name }} (${{ steps.version.outputs.code }})
-          files: TMessagesProj_App/afat/release/app.apk
+          files: TMessagesProj_App/**/app.apk
           generate_release_notes: true
