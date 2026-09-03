@@ -44,6 +44,7 @@ import android.window.OnBackInvokedDispatcher;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.graphics.ColorUtils;
+import androidx.core.graphics.Insets;
 import androidx.core.math.MathUtils;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -64,6 +65,7 @@ import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
+import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
@@ -426,16 +428,12 @@ public class StoryViewer implements NotificationCenter.NotificationCenterDelegat
 
         windowLayoutParams.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
 
-        if (Build.VERSION.SDK_INT >= 28) {
-            windowLayoutParams.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
-        }
-        if (Build.VERSION.SDK_INT >= 21) {
-            windowLayoutParams.flags =
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
-                            WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR |
-                            WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS |
-                            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON;
-        }
+        AndroidUtilities.applyEdgeToEdgeLayoutParams(windowLayoutParams);
+        windowLayoutParams.flags =
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
+            WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR |
+            WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS |
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON;
         isClosed = false;
         unreadStateChanged = false;
 
@@ -1214,11 +1212,6 @@ public class StoryViewer implements NotificationCenter.NotificationCenterDelegat
                 }
 
                 @Override
-                protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
-                    super.onLayout(changed, left, top, right, bottom);
-                }
-
-                @Override
                 protected void dispatchDraw(Canvas canvas) {
                     PeerStoriesView peerStoriesView = storiesViewPager.getCurrentPeerView();
                     float pivotY = 0;
@@ -1252,10 +1245,8 @@ public class StoryViewer implements NotificationCenter.NotificationCenterDelegat
                             peerStoriesView.setViewsThumbImageReceiver(progressHalf, s, pivotY, selfStoryViewsView.getCrossfadeToImage());
                         }
                         peerStoriesView.invalidate();
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                            peerStoriesView.outlineProvider.radiusInDp = (int) lerp(10f, 6f / toScale, selfStoryViewsView.progressToOpen);
-                            peerStoriesView.storyContainer.invalidateOutline();
-                        }
+                        peerStoriesView.outlineProvider.radiusInDp = (int) lerp(10f, 6f / toScale, selfStoryViewsView.progressToOpen);
+                        peerStoriesView.storyContainer.invalidateOutline();
                         storiesViewPager.setTranslationY((selfStoryViewsView.toY - pivotY) * progressHalf);
 
                     }
@@ -1765,14 +1756,16 @@ public class StoryViewer implements NotificationCenter.NotificationCenterDelegat
         }
         ATTACHED_FRAGMENT_IS_EDGE_TO_EDGE = ATTACH_TO_FRAGMENT && fragment != null && fragment.isSupportEdgeToEdge();
         ViewCompat.setOnApplyWindowInsetsListener(containerView, (v, insets) -> {
+            final Insets i = AndroidUtilities.getDefaultWindowInsets(insets, false);
+
             ViewGroup.MarginLayoutParams layoutParams = (ViewGroup.MarginLayoutParams) containerView.getLayoutParams();
             layoutParams.topMargin = ATTACHED_FRAGMENT_IS_EDGE_TO_EDGE ? 0 : insets.getSystemWindowInsetTop();
             layoutParams.bottomMargin = ATTACHED_FRAGMENT_IS_EDGE_TO_EDGE ?
                 insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom :
                 insets.getSystemWindowInsetBottom();
 
-            layoutParams.leftMargin = insets.getSystemWindowInsetLeft();
-            layoutParams.rightMargin = insets.getSystemWindowInsetRight();
+            layoutParams.leftMargin = i.left;
+            layoutParams.rightMargin = i.right;
 
             if (windowView != null) {
                 windowView.requestLayout();
@@ -1786,7 +1779,7 @@ public class StoryViewer implements NotificationCenter.NotificationCenterDelegat
 
         if (ATTACH_TO_FRAGMENT) {
             AndroidUtilities.removeFromParent(windowView);
-            windowView.setTag(0xFF112233, new Object());
+            windowView.setTag(R.id.sheet_attached_to_fragment_tag, new Object());
             fragment.getLayoutContainer().addView(windowView);
             if (!ATTACHED_FRAGMENT_IS_EDGE_TO_EDGE) {
                 AndroidUtilities.requestAdjustResize(fragment.getParentActivity(), fragment.getClassGuid());
@@ -2098,7 +2091,18 @@ public class StoryViewer implements NotificationCenter.NotificationCenterDelegat
             }
         }
         if (placeProvider != null) {
-            placeProvider.preLayout(storiesViewPager.getCurrentDialogId(), messageId, () -> {
+            long preLayoutDid = storiesViewPager.getCurrentDialogId();
+            int preLayoutMessageId = messageId;
+            if (storiesList instanceof StoriesController.StoryRepostsList) {
+                final PeerStoriesView peerView = storiesViewPager.getCurrentPeerView();
+                int position = peerView == null ? 0 : peerView.getSelectedPosition();
+                TL_stories.StoryItem si = peerView == null || position < 0 || position >= peerView.storyItems.size() ? null : peerView.storyItems.get(position);
+                if (si != null) {
+                    preLayoutDid = si.dialogId;
+                    preLayoutMessageId = si.id;
+                }
+            }
+            placeProvider.preLayout(preLayoutDid, preLayoutMessageId, () -> {
                 updateTransitionParams();
                 if (transitionViewHolder.avatarImage != null) {
                     transitionViewHolder.avatarImage.setVisible(false, true);
@@ -2130,6 +2134,9 @@ public class StoryViewer implements NotificationCenter.NotificationCenterDelegat
             if (storiesList instanceof StoriesController.SearchStoriesList && storyItem != null) {
                 did = storyItem.dialogId;
                 storyId = storyItem.messageId;
+            } else if (storiesList instanceof StoriesController.StoryRepostsList && storyItem != null) {
+                did = storyItem.dialogId;
+                storyId = storyItem.id;
             } else if (storiesList != null) {
                 storyId = dayStoryId;
             }
@@ -2589,6 +2596,9 @@ public class StoryViewer implements NotificationCenter.NotificationCenterDelegat
                     if (currentPlayerScope != null) {
                         currentPlayerScope.invalidate();
                     }
+                    if (surfaceView != null) {
+                        surfaceView.setVisibility(View.INVISIBLE);
+                    }
                     release();
                     try {
                         AndroidUtilities.runOnUIThread(() -> {
@@ -2617,10 +2627,8 @@ public class StoryViewer implements NotificationCenter.NotificationCenterDelegat
                     }
                 }
             });
-            openCloseAnimator.setDuration(400);
+            openCloseAnimator.setDuration(320);
             openCloseAnimator.setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT);
-//            openCloseAnimator.setDuration(2000);
-//            openCloseAnimator.setInterpolator(CubicBezierInterpolator.DEFAULT);
             openCloseAnimator.start();
         }, 16);
     }

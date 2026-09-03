@@ -48,7 +48,8 @@ protected:
     virtual void onConnected() = 0;
     virtual bool hasPendingRequests() = 0;
 
-    bool initRealTLS(const std::string &domain);
+    bool startRealTLS(const std::string &domain);
+    bool continueRealTLSHandshake();
     void cleanupRealTLS();
     ssize_t tlsSend(const void *buf, size_t len);
     ssize_t tlsRecv(void *buf, size_t len);
@@ -90,6 +91,9 @@ private:
     SSL_CTX *sslCtx = nullptr;
     SSL     *sslConn = nullptr;
     bool     useRealTLS = false;
+    // The handshake runs non-blocking across several epoll events; this tracks whether
+    // SSL_connect is currently waiting to write, so adjustWriteOp can ask for EPOLLOUT.
+    bool     tlsHandshakeWantsWrite = true;
 
     uint8_t proxyAuthState;
 

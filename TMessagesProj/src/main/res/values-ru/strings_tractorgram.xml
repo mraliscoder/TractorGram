@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="TractorProfileIdTelegramApi">ID · Telegram API</string>
+    <string name="TractorProfileIdBotApi">ID · Bot API</string>
+    <string name="TractorProfileIdCopied">ID скопирован в буфер обмена</string>
+    <string name="TractorProfileIdSwitchedTelegramApi">Показан ID в формате Telegram API</string>
+    <string name="TractorProfileIdSwitchedBotApi">Показан ID в формате Bot API</string>
+</resources>

@@ -288,7 +288,7 @@ public:
                             Op::string("\x11\xec\x00\x1d\x00\x17\x00\x18", 8)
                         },
                         { Op::string("\x00\x0b\x00\x02\x01\x00", 6) },
-                        { Op::string("\x00\x0d\x00\x12\x00\x10\x04\x03\x08\x04\x04\x01\x05\x03\x08\x05\x05\x01\x08\x06\x06\x01",22) },
+                        { Op::string("\x00\x0d\x00\x18\x00\x16\x09\x04\x09\x05\x09\x06\x04\x03\x08\x04\x04\x01\x05\x03\x08\x05\x05\x01\x08\x06\x06\x01",28) },
                         { Op::string("\x00\x10\x00\x0e\x00\x0c\x02\x68\x32\x08\x68\x74\x74\x70\x2f\x31\x2e\x31", 18) },
                         { Op::string("\x00\x12\x00\x00", 4) },
                         { Op::string("\x00\x17\x00\x00", 4) },
@@ -316,7 +316,7 @@ public:
                             Op::string("\x00\x00\x01\x00\x01", 5),
                             Op::random(1),
                             Op::string("\x00\x20", 2),
-                            Op::random(32),
+                            Op::K(),
                             Op::begin_scope(),
                             Op::E(),
                             Op::end_scope(),
@@ -446,15 +446,12 @@ private:
     }
 };
 
-bool ConnectionSocket::initRealTLS(const std::string &domain) {
-    // Temporarily switch to blocking mode for the TLS handshake
-    int flags = fcntl(socketFd, F_GETFL, 0);
-    fcntl(socketFd, F_SETFL, flags & ~O_NONBLOCK);
-
+// Allocates the SSL objects for the connection. The socket stays non-blocking; the
+// handshake itself is driven by continueRealTLSHandshake() across epoll events.
+bool ConnectionSocket::startRealTLS(const std::string &domain) {
     sslCtx = SSL_CTX_new(TLS_client_method());
     if (!sslCtx) {
         if (LOGS_ENABLED) DEBUG_E("connection(%p) SSL_CTX_new failed", this);
-        fcntl(socketFd, F_SETFL, flags);
         return false;
     }
     SSL_CTX_set_min_proto_version(sslCtx, TLS1_2_VERSION);
@@ -465,7 +462,6 @@ bool ConnectionSocket::initRealTLS(const std::string &domain) {
         if (LOGS_ENABLED) DEBUG_E("connection(%p) SSL_new failed", this);
         SSL_CTX_free(sslCtx);
         sslCtx = nullptr;
-        fcntl(socketFd, F_SETFL, flags);
         return false;
     }
     if (SSL_set_fd(sslConn, socketFd) != 1) {
@@ -474,32 +470,54 @@ bool ConnectionSocket::initRealTLS(const std::string &domain) {
         sslConn = nullptr;
         SSL_CTX_free(sslCtx);
         sslCtx = nullptr;
-        fcntl(socketFd, F_SETFL, flags);
         return false;
     }
+    // Partial writes let a short SSL_write be reported instead of failing, and the moving
+    // write buffer lets the retry after WANT_WRITE carry a different (grown) buffer.
+    SSL_set_mode(sslConn, SSL_MODE_ENABLE_PARTIAL_WRITE | SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
     if (!domain.empty()) {
         SSL_set_tlsext_host_name(sslConn, domain.c_str());
     }
     static const unsigned char alpnProtos[] = "\x02h2\x08http/1.1";
     SSL_set_alpn_protos(sslConn, alpnProtos, sizeof(alpnProtos) - 1);
+    return true;
+}
 
-    int ret = SSL_connect(sslConn);
-    // Restore non-blocking mode regardless of outcome
-    fcntl(socketFd, F_SETFL, flags);
-    if (ret != 1) {
-        int err = SSL_get_error(sslConn, ret);
-        if (LOGS_ENABLED) DEBUG_E("connection(%p) SSL_connect failed err=%d", this, err);
-        cleanupRealTLS();
+// Drives one step of the non-blocking handshake. Returns true only once the handshake has
+// completed; on a still-in-progress handshake or on failure (socket already closed) it
+// returns false and the caller must not touch the socket any further this round.
+bool ConnectionSocket::continueRealTLSHandshake() {
+    if (sslConn == nullptr && !startRealTLS(currentSecretDomain)) {
+        closeSocket(1, -1);
         return false;
     }
-    if (LOGS_ENABLED) DEBUG_D("connection(%p) real TLS handshake complete, cipher=%s", this, SSL_get_cipher(sslConn));
-    useRealTLS = true;
-    return true;
+    lastEventTime = ConnectionsManager::getInstance(instanceNum).getCurrentTimeMonotonicMillis();
+    int ret = SSL_connect(sslConn);
+    if (ret == 1) {
+        if (LOGS_ENABLED) DEBUG_D("connection(%p) real TLS handshake complete, cipher=%s", this, SSL_get_cipher(sslConn));
+        useRealTLS = true;
+        tlsHandshakeWantsWrite = false;
+        proxyAuthState = 0;
+        adjustWriteOp();
+        return true;
+    }
+    int err = SSL_get_error(sslConn, ret);
+    if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) {
+        tlsHandshakeWantsWrite = (err == SSL_ERROR_WANT_WRITE);
+        adjustWriteOp();
+        return false;
+    }
+    if (LOGS_ENABLED) DEBUG_E("connection(%p) SSL_connect failed err=%d", this, err);
+    closeSocket(1, -1);
+    return false;
 }
 
 void ConnectionSocket::cleanupRealTLS() {
     if (sslConn) {
-        SSL_shutdown(sslConn);
+        // Only a completed handshake has a session worth shutting down cleanly.
+        if (useRealTLS) {
+            SSL_shutdown(sslConn);
+        }
         SSL_free(sslConn);
         sslConn = nullptr;
     }
@@ -508,6 +526,7 @@ void ConnectionSocket::cleanupRealTLS() {
         sslCtx = nullptr;
     }
     useRealTLS = false;
+    tlsHandshakeWantsWrite = true;
 }
 
 ssize_t ConnectionSocket::tlsSend(const void *buf, size_t len) {
@@ -515,7 +534,13 @@ ssize_t ConnectionSocket::tlsSend(const void *buf, size_t len) {
         int written = SSL_write(sslConn, buf, (int) len);
         if (written <= 0) {
             int err = SSL_get_error(sslConn, written);
+            if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) {
+                // Send buffer is full — keep the bytes queued and retry on the next event.
+                errno = EAGAIN;
+                return -1;
+            }
             if (LOGS_ENABLED) DEBUG_E("connection(%p) SSL_write error=%d", this, err);
+            errno = EIO;
             return -1;
         }
         return (ssize_t) written;
@@ -607,6 +632,7 @@ void ConnectionSocket::openConnection(std::string address, uint16_t port, std::s
             tempBuffLength = 65 * 1024;
         } else if (proxySecret->size() > 17 && (uint8_t)(*proxySecret)[0] == 0xfe) {
             proxyAuthState = 20;
+            tlsHandshakeWantsWrite = true;
             currentSecret = proxySecret->substr(1, 16);
             currentSecretDomain = proxySecret->substr(17);
             tempBuffLength = 0;
@@ -697,6 +723,7 @@ void ConnectionSocket::openConnection(std::string address, uint16_t port, std::s
             tempBuffLength = 65 * 1024;
         } else if (secret.size() > 17 && (uint8_t)secret[0] == 0xfe) {
             proxyAuthState = 20;
+            tlsHandshakeWantsWrite = true;
             currentSecret = secret.substr(1, 16);
             currentSecretDomain = secret.substr(17);
             tempBuffLength = 0;
@@ -794,6 +821,21 @@ void ConnectionSocket::closeSocket(int32_t reason, int32_t error) {
 }
 
 void ConnectionSocket::onEvent(uint32_t events) {
+    // The real-TLS handshake owns the socket until it completes: it must run before either
+    // the read or the write branch, otherwise tlsRecv would fall through to a plain recv()
+    // and swallow handshake bytes.
+    if (proxyAuthState == 20 && (events & (EPOLLIN | EPOLLOUT))) {
+        int32_t error;
+        if (checkSocketError(&error) != 0) {
+            closeSocket(1, error);
+            return;
+        }
+        if (!continueRealTLSHandshake()) {
+            return;
+        }
+        // Handshake finished (proxyAuthState is now 0) — fall through so any data that this
+        // same event carries is read, and anything queued gets flushed.
+    }
     if (events & EPOLLIN) {
         int32_t error;
         if (checkSocketError(&error) != 0) {
@@ -1021,15 +1063,7 @@ void ConnectionSocket::onEvent(uint32_t events) {
             return;
         } else {
             if (proxyAuthState != 0) {
-                if (proxyAuthState == 20) {
-                    lastEventTime = ConnectionsManager::getInstance(instanceNum).getCurrentTimeMonotonicMillis();
-                    if (!initRealTLS(currentSecretDomain)) {
-                        closeSocket(1, -1);
-                        return;
-                    }
-                    proxyAuthState = 0;
-                    adjustWriteOp();
-                } else if (proxyAuthState >= 10) {
+                if (proxyAuthState >= 10) {
                     if (proxyAuthState == 10) {
                         lastEventTime = ConnectionsManager::getInstance(instanceNum).getCurrentTimeMonotonicMillis();
                         tlsHashMismatch = false;
@@ -1158,6 +1192,12 @@ void ConnectionSocket::onEvent(uint32_t events) {
                         }
                     } else {
                         if ((sentLength = tlsSend(buffer->bytes(), remaining)) < 0) {
+                            if (useRealTLS && errno == EAGAIN) {
+                                // TLS send buffer is full; the bytes stay queued and are
+                                // retried once the socket signals writable again.
+                                adjustWriteOp();
+                                return;
+                            }
                             if (LOGS_ENABLED) DEBUG_D("connection(%p) send failed", this);
                             closeSocket(1, -1);
                             return;
@@ -1206,7 +1246,7 @@ void ConnectionSocket::adjustWriteOp() {
         return;
     }
     eventMask.events = EPOLLIN | EPOLLRDHUP | EPOLLERR | EPOLLET;
-    if (proxyAuthState == 0 && (outgoingByteStream->hasData() || !onConnectedSent) || proxyAuthState == 1 || proxyAuthState == 3 || proxyAuthState == 5 || proxyAuthState == 10 || proxyAuthState == 20) {
+    if (proxyAuthState == 0 && (outgoingByteStream->hasData() || !onConnectedSent) || proxyAuthState == 1 || proxyAuthState == 3 || proxyAuthState == 5 || proxyAuthState == 10 || (proxyAuthState == 20 && tlsHandshakeWantsWrite)) {
         eventMask.events |= EPOLLOUT;
     }
     eventMask.data.ptr = eventObject;

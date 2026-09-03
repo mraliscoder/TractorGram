@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Fork-only strings. Kept out of strings.xml on purpose: that file is replaced wholesale on every
+  upstream update, and anything added there turns into a merge conflict.
+-->
+<resources>
+    <string name="TractorProfileIdTelegramApi">ID · Telegram API</string>
+    <string name="TractorProfileIdBotApi">ID · Bot API</string>
+    <string name="TractorProfileIdCopied">ID copied to clipboard</string>
+    <string name="TractorProfileIdSwitchedTelegramApi">Now showing the Telegram API ID</string>
+    <string name="TractorProfileIdSwitchedBotApi">Now showing the Bot API ID</string>
+</resources>

@@ -21,7 +21,10 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -37,7 +40,8 @@ public class RemoteConfig {
     private static final String FREE_PROXIES_URL = "https://config.zov.network/free_proxies";
     private static final long PROXY_FAIL_TIMEOUT_MS = 30_000;
 
-    public static volatile List<Long> checkmarks = new ArrayList<>();
+    // Looked up per row while the dialog list scrolls, so it has to be a hash lookup.
+    public static volatile Set<Long> checkmarks = Collections.emptySet();
     public static volatile String latestVersion = "";
     public static volatile String officialChannel = "";
     public static volatile List<FreeProxy> freeProxies = new ArrayList<>();
@@ -154,7 +158,7 @@ public class RemoteConfig {
                 JSONObject json = fetchJson(REMOTE_CONFIG_URL);
                 if (json == null) return;
 
-                List<Long> newCheckmarks = new ArrayList<>();
+                Set<Long> newCheckmarks = new HashSet<>();
                 JSONArray arr = json.optJSONArray("checkmarks");
                 if (arr != null) {
                     for (int i = 0; i < arr.length(); i++) {

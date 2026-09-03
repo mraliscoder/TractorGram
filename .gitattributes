@@ -1,0 +1,7 @@
+# Telegram's theme parser strips only the trailing \n from every line, so a CRLF
+# checkout leaves a \r on each value; Integer.parseInt then throws and the colour
+# silently becomes 0. On Windows that turns every file-based theme black.
+*.attheme -text
+
+# Same reasoning for anything else the app reads byte-for-byte.
+*.dat -text
