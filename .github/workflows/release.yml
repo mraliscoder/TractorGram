@@ -5,70 +5,119 @@ on:
     branches:
       - tractorgram-changes
 
+permissions:
+  contents: read
+
+concurrency:
+  group: tractorgram-stable-release
+  cancel-in-progress: false
+
 jobs:
   build:
-    name: Build Release APK
+    if: github.repository == 'mraliscoder/TractorGram'
+    name: Build and verify the stable APK
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
+          ref: ${{ github.sha }}
           submodules: recursive
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           java-version: '17'
-          distribution: 'temurin'
+          distribution: temurin
           cache: gradle
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v3
 
-      - name: Set up NDK and SDK components
-        run: |
-          echo "y" | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager \
-            "ndk;27.2.12479018" \
-            "platforms;android-36" \
-            "build-tools;36.0.0" \
-            "cmake;3.22.1"
+      - name: Install Android build dependencies
+        run: sdkmanager 'ndk;27.2.12479018' 'platforms;android-36' 'build-tools;36.0.0' 'cmake;3.22.1'
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
-      - name: Decode keystore
-        run: |
-          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > TMessagesProj/config/release.keystore
-
-      - name: Build release APK
-        run: |
-          ./gradlew :TMessagesProj_App:assembleRelease \
-            -PRELEASE_STORE_PASSWORD="${{ secrets.RELEASE_STORE_PASSWORD }}" \
-            -PRELEASE_KEY_ALIAS="${{ secrets.RELEASE_KEY_ALIAS }}" \
-            -PRELEASE_KEY_PASSWORD="${{ secrets.RELEASE_KEY_PASSWORD }}"
+      - name: Build the distributed variant
         env:
-          GRADLE_OPTS: "-Xmx4g -XX:+HeapDumpOnOutOfMemoryError"
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          TRACTORGRAM_RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          TRACTORGRAM_RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          TRACTORGRAM_RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -n "$RELEASE_KEYSTORE_BASE64"
+          test -n "$TRACTORGRAM_RELEASE_STORE_PASSWORD"
+          test -n "$TRACTORGRAM_RELEASE_KEY_ALIAS"
+          test -n "$TRACTORGRAM_RELEASE_KEY_PASSWORD"
+          umask 077
+          export TRACTORGRAM_RELEASE_KEYSTORE="$RUNNER_TEMP/tractorgram-release.keystore"
+          trap 'rm -f "$TRACTORGRAM_RELEASE_KEYSTORE"' EXIT
+          printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 --decode > "$TRACTORGRAM_RELEASE_KEYSTORE"
+          unset RELEASE_KEYSTORE_BASE64
+          bash gradlew :TMessagesProj_App:assembleBundleAfatRelease --max-workers=4
 
-      - name: Upload APK artifact
+      - name: Verify the APK and generate release metadata
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/tractorgram"
+          cp TMessagesProj_App/build/outputs/apk/bundleAfat/release/app.apk "$RUNNER_TEMP/tractorgram/app.apk"
+          python3 Tools/tractorgram_release_metadata.py \
+            --apk "$RUNNER_TEMP/tractorgram/app.apk" \
+            --build-tools "$ANDROID_SDK_ROOT/build-tools/36.0.0" \
+            --commit "$GITHUB_SHA" \
+            --output "$RUNNER_TEMP/tractorgram/update.json"
+          cat "$RUNNER_TEMP/tractorgram/update.json" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the verified APK and metadata
         uses: actions/upload-artifact@v4
         with:
-          name: release-apk-${{ github.sha }}
-          path: TMessagesProj_App/**/app.apk
+          name: tractorgram-${{ github.sha }}
+          path: ${{ runner.temp }}/tractorgram/
+          if-no-files-found: error
           retention-days: 30
 
-      - name: Get version info
-        id: version
-        run: |
-          VERSION_NAME=$(grep "APP_VERSION_NAME" gradle.properties | cut -d= -f2)
-          VERSION_CODE=$(grep "APP_VERSION_CODE" gradle.properties | cut -d= -f2)
-          echo "name=$VERSION_NAME" >> $GITHUB_OUTPUT
-          echo "code=$VERSION_CODE" >> $GITHUB_OUTPUT
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+  publish:
+    name: Publish the verified assets
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
         with:
-          tag_name: v${{ steps.version.outputs.name }}-${{ steps.version.outputs.code }}
-          name: Release ${{ steps.version.outputs.name }} (${{ steps.version.outputs.code }})
-          files: TMessagesProj_App/**/app.apk
-          generate_release_notes: true
+          name: tractorgram-${{ github.sha }}
+          path: release
+
+      - name: Check the draft assets and publish at the build SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          commit=$(jq -er '.buildCommit' release/update.json)
+          version=$(jq -er '.versionName' release/update.json)
+          code=$(jq -er '.versionCode' release/update.json)
+          apk_digest=$(sha256sum release/app.apk | cut -d ' ' -f 1)
+          metadata_digest=$(sha256sum release/update.json | cut -d ' ' -f 1)
+          test "$commit" = "$GITHUB_SHA"
+          test "$apk_digest" = "$(jq -er '.apkSha256' release/update.json)"
+          tag="v${version}-${code}"
+          remote_tag=$(git ls-remote --tags "https://github.com/$GH_REPO.git" "refs/tags/$tag")
+          test -z "$remote_tag"
+
+          gh release create "$tag" release/app.apk release/update.json \
+            --target "$commit" --draft --generate-notes --title "TractorGram $version ($code)"
+          release_id=$(gh release view "$tag" --json databaseId --jq .databaseId)
+          gh api "repos/$GH_REPO/releases/$release_id" | jq -e \
+            --arg apk "sha256:$apk_digest" --arg metadata "sha256:$metadata_digest" --arg commit "$commit" \
+            '.target_commitish == $commit and .draft == true and .prerelease == false and
+             ([.assets[] | select(.name == "app.apk" and .state == "uploaded" and .digest == $apk)] | length == 1) and
+             ([.assets[] | select(.name == "update.json" and .state == "uploaded" and .digest == $metadata)] | length == 1)'
+
+          gh release edit "$tag" --draft=false --latest
+          published_commit=$(git ls-remote --tags "https://github.com/$GH_REPO.git" "refs/tags/$tag" | cut -f 1)
+          test "$published_commit" = "$commit"
+
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
+          gh release download "$tag" --pattern app.apk --pattern update.json --dir "$tmp"
+          cmp release/app.apk "$tmp/app.apk"
+          cmp release/update.json "$tmp/update.json"

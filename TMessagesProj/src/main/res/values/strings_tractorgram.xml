@@ -9,4 +9,16 @@
     <string name="TractorProfileIdCopied">ID copied to clipboard</string>
     <string name="TractorProfileIdSwitchedTelegramApi">Now showing the Telegram API ID</string>
     <string name="TractorProfileIdSwitchedBotApi">Now showing the Bot API ID</string>
+    <string name="TractorVerifiedBadge">Verified by TractorGram</string>
+    <string name="TractorVerifiedProfile">%1$s is verified by the TractorGram team</string>
+    <string name="TractorBuiltInProxies">Built-in proxies</string>
+    <string name="TractorCheckUpdates">Check for updates</string>
+    <string name="TractorAutoUpdates">Automatically check for updates</string>
+    <string name="TractorUpdateChecking">Checking for TractorGram updates…</string>
+    <string name="TractorUpdateUnavailable">Couldn’t check for updates. Try again later.</string>
+    <string name="TractorUpdateNone">No newer compatible TractorGram release found.</string>
+    <string name="TractorUpdateTitle">TractorGram %1$s is available</string>
+    <string name="TractorUpdateDetails">See the release page for what’s new.</string>
+    <string name="TractorUpdateOpen">Open release page</string>
+    <string name="TractorUpdateLater">Later</string>
 </resources>

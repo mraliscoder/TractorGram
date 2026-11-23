@@ -5,4 +5,16 @@
     <string name="TractorProfileIdCopied">ID скопирован в буфер обмена</string>
     <string name="TractorProfileIdSwitchedTelegramApi">Показан ID в формате Telegram API</string>
     <string name="TractorProfileIdSwitchedBotApi">Показан ID в формате Bot API</string>
+    <string name="TractorVerifiedBadge">Верифицировано TractorGram</string>
+    <string name="TractorVerifiedProfile">%1$s верифицирован командой TractorGram</string>
+    <string name="TractorBuiltInProxies">Встроенные прокси</string>
+    <string name="TractorCheckUpdates">Проверить обновления</string>
+    <string name="TractorAutoUpdates">Проверять обновления автоматически</string>
+    <string name="TractorUpdateChecking">Проверяем обновления TractorGram…</string>
+    <string name="TractorUpdateUnavailable">Не удалось проверить обновления. Попробуйте позже.</string>
+    <string name="TractorUpdateNone">Более свежих совместимых выпусков TractorGram нет.</string>
+    <string name="TractorUpdateTitle">Доступен TractorGram %1$s</string>
+    <string name="TractorUpdateDetails">Список изменений доступен на странице выпуска.</string>
+    <string name="TractorUpdateOpen">Открыть страницу выпуска</string>
+    <string name="TractorUpdateLater">Позже</string>
 </resources>

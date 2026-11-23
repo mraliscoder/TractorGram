@@ -10,11 +10,11 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
-import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.tgnet.ConnectionsManager;
+import org.telegram.utils.proxy.ProxySettings;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -42,12 +42,7 @@ public class RemoteConfig {
 
     // Looked up per row while the dialog list scrolls, so it has to be a hash lookup.
     public static volatile Set<Long> checkmarks = Collections.emptySet();
-    public static volatile String latestVersion = "";
-    public static volatile String officialChannel = "";
     public static volatile List<FreeProxy> freeProxies = new ArrayList<>();
-
-    /** Set by LaunchActivity to receive an update-available callback on the main thread. */
-    public static Runnable onVersionOutdated;
 
     private static final Handler mainHandler = new Handler(Looper.getMainLooper());
     private static ScheduledExecutorService scheduler;
@@ -81,7 +76,13 @@ public class RemoteConfig {
         }
 
         public SharedConfig.ProxyInfo toProxyInfo() {
-            return new SharedConfig.ProxyInfo(host, port, "", "", secret);
+            ProxySettings settings = ProxySettings.builder()
+                    .setType(secret.isEmpty() ? ProxySettings.Type.SOCKS5 : ProxySettings.Type.MTPROTO)
+                    .setAddress(host)
+                    .setPort(port)
+                    .setSecret(secret)
+                    .build();
+            return new SharedConfig.ProxyInfo(settings);
         }
     }
 
@@ -166,16 +167,6 @@ public class RemoteConfig {
                     }
                 }
                 checkmarks = newCheckmarks;
-                latestVersion = json.optString("latestVersion", "");
-                officialChannel = json.optString("officialChannel", "");
-
-                if (isVersionOutdated()) {
-                    mainHandler.post(() -> {
-                        if (onVersionOutdated != null) {
-                            onVersionOutdated.run();
-                        }
-                    });
-                }
             } catch (Exception e) {
                 FileLog.e(e);
             }
@@ -247,14 +238,14 @@ public class RemoteConfig {
         FreeProxy fp = proxies.get(index);
         SharedConfig.ProxyInfo info = fp.toProxyInfo();
         SharedConfig.currentProxy = info;
-        ConnectionsManager.setProxySettings(true, info.address, info.port, info.username, info.password, info.secret);
+        ConnectionsManager.setProxySettings(true, info.settings);
         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.proxySettingsChanged);
     }
 
     /** Disables the proxy in the connection layer and clears currentProxy (does NOT persist the pref). */
     public static void disableBuiltInProxy() {
         SharedConfig.currentProxy = null;
-        ConnectionsManager.setProxySettings(false, "", 1080, "", "", "");
+        ConnectionsManager.setProxySettings(false, null);
         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.proxySettingsChanged);
     }
 
@@ -287,39 +278,6 @@ public class RemoteConfig {
             }
         } else {
             proxyFailedSince = 0;
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // Version check
-    // -------------------------------------------------------------------------
-
-    public static boolean isVersionOutdated() {
-        if (latestVersion.isEmpty()) return false;
-        try {
-            return compareVersions(BuildVars.BUILD_VERSION_STRING, latestVersion) < 0;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    private static int compareVersions(String v1, String v2) {
-        String[] p1 = v1.split("\\.");
-        String[] p2 = v2.split("\\.");
-        int len = Math.max(p1.length, p2.length);
-        for (int i = 0; i < len; i++) {
-            int a = i < p1.length ? safeParseInt(p1[i]) : 0;
-            int b = i < p2.length ? safeParseInt(p2[i]) : 0;
-            if (a != b) return a - b;
-        }
-        return 0;
-    }
-
-    private static int safeParseInt(String s) {
-        try {
-            return Integer.parseInt(s.trim());
-        } catch (NumberFormatException e) {
-            return 0;
         }
     }
 
